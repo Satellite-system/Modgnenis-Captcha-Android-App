@@ -3,6 +3,7 @@ package com.example.captcha;
 import android.os.Bundle;
 
 import androidx.annotation.NonNull;
+import androidx.appcompat.app.AppCompatActivity;
 import androidx.fragment.app.Fragment;
 import androidx.navigation.fragment.NavHostFragment;
 
@@ -12,6 +13,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageView;
 import android.widget.Toast;
+import android.widget.Toolbar;
 
 import com.android.volley.Request;
 import com.android.volley.RequestQueue;
@@ -37,160 +39,133 @@ import org.json.JSONObject;
  */
 public class CaptchaFragment extends Fragment {
 
-    // TODO: Rename parameter arguments, choose names that match
-    // the fragment initialization parameters, e.g. ARG_ITEM_NUMBER
-    private static final String ARG_PARAM1 = "param1";
-    private static final String ARG_PARAM2 = "param2";
-
-    // TODO: Rename and change types of parameters
-    private String mParam1;
-    private String mParam2;
-    private  String hashStr;
-
-    private FragmentCaptchaBinding binding;
-    ImageView imageView ;
-    String TAG = FirstFragment.class.getSimpleName();
-    RequestQueue queue; //
-
-    public CaptchaFragment() {
-        // Required empty public constructor
-    }
-
-    /**
-     * Use this factory method to create a new instance of
-     * this fragment using the provided parameters.
-     *
-     * @param param1 Parameter 1.
-     * @param param2 Parameter 2.
-     * @return A new instance of fragment CaptchaFragment.
-     */
-    // TODO: Rename and change types and number of parameters
-    public static CaptchaFragment newInstance(String param1, String param2) {
-        CaptchaFragment fragment = new CaptchaFragment();
-        Bundle args = new Bundle();
-        args.putString(ARG_PARAM1, param1);
-        args.putString(ARG_PARAM2, param2);
-        fragment.setArguments(args);
-        return fragment;
-    }
+        private FragmentCaptchaBinding binding;
+        private String hashStr;
+        private RequestQueue queue;
+        private String TAG = CaptchaFragment.class.getSimpleName();
 
     @Override
-    public void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        if (getArguments() != null) {
-            mParam1 = getArguments().getString(ARG_PARAM1);
-            mParam2 = getArguments().getString(ARG_PARAM2);
-        }
-    }
-
-    @Override
-    public View onCreateView(LayoutInflater inflater, ViewGroup container,
-                             Bundle savedInstanceState) {
+    public View onCreateView(
+            @NonNull LayoutInflater inflater, ViewGroup container,
+            Bundle savedInstanceState
+    ) {
 
         binding = FragmentCaptchaBinding.inflate(inflater, container, false);
         return binding.getRoot();
-    }
-
-    public void onViewCreated(@NonNull View view, Bundle savedInstanceState) {
-        super.onViewCreated(view, savedInstanceState);
-
-        queue = Volley.newRequestQueue(requireContext());
-        imageView =  (ImageView) getView().findViewById(R.id.captchaImgView);
-
-        getCaptcha();
-        binding.verifyButton.setOnClickListener(view1 -> {
-            verifyCaptca();
-        });
 
     }
 
+        @Override
+        public void onViewCreated(@NonNull View view, Bundle savedInstanceState) {
+            super.onViewCreated(view, savedInstanceState);
 
-    private void getCaptcha(){
-        String url = "https://captcha-generator-verifier-api.onrender.com/captcha";
-        StringRequest request = new StringRequest(Request.Method.GET, url,
-                new Response.Listener<String>() {
-                    @Override
-                    public void onResponse(String response) {
+            queue = Volley.newRequestQueue(requireContext());
+
+            // Initially hide input field and verify button, show progress bar
+            binding.inputText.setVisibility(View.GONE);
+            binding.verifyButton.setVisibility(View.GONE);
+            binding.refreshButton.setVisibility(View.GONE);
+            binding.progressBar.setVisibility(View.VISIBLE);
+
+            getCaptcha();
+
+            binding.verifyButton.setOnClickListener(view1 -> verifyCaptca());
+
+            // Retry API call on refresh button click
+            binding.refreshButton.setOnClickListener(view12 -> {
+                binding.refreshButton.setVisibility(View.GONE);
+                binding.progressBar.setVisibility(View.VISIBLE);
+                getCaptcha();
+            });
+
+
+        }
+
+        private void getCaptcha() {
+            String url = "https://captcha-generator-verifier-api.onrender.com/captcha";
+            StringRequest request = new StringRequest(Request.Method.GET, url,
+                    response -> {
                         try {
                             JSONObject jsonObject = new JSONObject(response);
-//                            Toast.makeText(getApplicationContext(), "Success", Toast.LENGTH_LONG).show();
-//                            Toast.makeText(requireContext(), "Success", Toast.LENGTH_LONG).show();
-
                             String imageUrl = jsonObject.getString("image");
                             hashStr = jsonObject.getString("hash");
 
+                            // Load captcha image using Glide
                             Glide.with(requireContext())
                                     .load(imageUrl)
                                     .placeholder(R.drawable.ic_launcher_background)  // Optional placeholder
                                     .error(R.drawable.ic_launcher_foreground)       // Optional error image
-                                    .into(imageView);
+                                    .into(binding.captchaImgView);
+
+                            // Once image is loaded, show input field and verify button, hide progress bar
+                            binding.inputText.setVisibility(View.VISIBLE);
+                            binding.verifyButton.setVisibility(View.VISIBLE);
+                            binding.progressBar.setVisibility(View.GONE);
                         } catch (Exception ex) {
-                            Toast.makeText(requireContext(), "Some Error Occured", Toast.LENGTH_LONG).show();
+                            showError();
                             Log.d(TAG, "JSON exception: " + ex.getMessage());
                         }
-                    }
-                },
-                new Response.ErrorListener() {
-                    @Override
-                    public void onErrorResponse(VolleyError error) {
-                        Toast.makeText(requireContext(), "Backend is Down", Toast.LENGTH_LONG).show();
+                    },
+                    error -> {
+                        showError();
                         Log.d(TAG, "Error message: " + error.getMessage());
-                    }
-                }) ;
-        queue.add(request);
-    }
+                    });
 
-    private void verifyCaptca(){
-        String url = "https://captcha-generator-verifier-api.onrender.com/captcha";
-        String enteredCode = binding.inputText.getText().toString();  // Convert to String
-
-        // Create JSON body
-        JSONObject body = new JSONObject();
-        try {
-            body.put("captcha", enteredCode);
-            body.put("hash", hashStr);
-        } catch (JSONException e) {
-            e.printStackTrace();
-            Toast.makeText(requireContext(), "Error in Json Formatting", Toast.LENGTH_LONG).show();
-            return;
+            queue.add(request);
         }
 
-//        Toast.makeText(requireContext(), body.toString(), Toast.LENGTH_LONG).show();
+        private void verifyCaptca() {
+            String url = "https://captcha-generator-verifier-api.onrender.com/captcha";
+            String enteredCode = binding.inputText.getText().toString();
 
-        // Create JsonObjectRequest
-        JsonObjectRequest request = new JsonObjectRequest(Request.Method.POST, url, body,
-                new Response.Listener<JSONObject>() {
-                    @Override
-                    public void onResponse(JSONObject response) {
+            // Create JSON body
+            JSONObject body = new JSONObject();
+            try {
+                body.put("captcha", enteredCode);
+                body.put("hash", hashStr);
+            } catch (JSONException e) {
+                e.printStackTrace();
+                Toast.makeText(requireContext(), "Error in Json Formatting", Toast.LENGTH_LONG).show();
+                return;
+            }
+
+            JsonObjectRequest request = new JsonObjectRequest(Request.Method.POST, url, body,
+                    response -> {
                         try {
-        // Process the JSON response
-        boolean verified = response.getBoolean("match");
-        if (verified) {
-            Toast.makeText(requireContext(), "Verified", Toast.LENGTH_LONG).show();
-        } else {
-            Toast.makeText(requireContext(), "Wrong Captcha", Toast.LENGTH_LONG).show();
-        }
+                            boolean verified = response.getBoolean("match");
+                            if (verified) {
+                                Toast.makeText(requireContext(), "Verified", Toast.LENGTH_LONG).show();
+                                // Initially hide input field and verify button, show progress bar
+                                binding.inputText.setText("");
+                                binding.inputText.setVisibility(View.GONE);
+                                binding.verifyButton.setVisibility(View.GONE);
+                                binding.refreshButton.setVisibility(View.GONE);
+                                binding.progressBar.setVisibility(View.VISIBLE);
 
-        Log.d(TAG, response.toString());
-
-    } catch (JSONException ex) {
-        // Handle the JSON parsing error
-        Toast.makeText(requireContext(), "Error parsing response", Toast.LENGTH_LONG).show();
-        Log.d(TAG, "JSON exception: " + ex.getMessage());
-    }
-                    }
-                },
-                new Response.ErrorListener() {
-                    @Override
-                    public void onErrorResponse(VolleyError error) {
+                                getCaptcha();
+                            } else {
+                                Toast.makeText(requireContext(), "Wrong Captcha", Toast.LENGTH_LONG).show();
+                            }
+                        } catch (JSONException ex) {
+                            Toast.makeText(requireContext(), "Error parsing response", Toast.LENGTH_LONG).show();
+                            Log.d(TAG, "JSON exception: " + ex.getMessage());
+                        }
+                    },
+                    error -> {
                         Toast.makeText(requireContext(), "Backend is Down", Toast.LENGTH_LONG).show();
                         Log.d(TAG, "Error message: " + error.getMessage());
-                    }
-                });
+                    });
 
-// Add the request to the queue
-        queue.add(request);
-    }
+            queue.add(request);
+        }
 
+        private void showError() {
+            // Show refresh button, hide other views and progress bar
+            binding.inputText.setVisibility(View.GONE);
+            binding.verifyButton.setVisibility(View.GONE);
+            binding.progressBar.setVisibility(View.GONE);
+            binding.refreshButton.setVisibility(View.VISIBLE);
+            Toast.makeText(requireContext(), "Failed to load captcha", Toast.LENGTH_LONG).show();
+        }
 
 }
